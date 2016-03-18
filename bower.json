@@ -1,0 +1,29 @@
+{
+  "name": "AdvancedGraphicFinalProject",
+  "authors": [
+    "Gursharnbir Singh <gsing538@my.cntennialcollege.ca>"
+  ],
+  "description": "Advanced Graphics Final Project",
+  "main": "",
+  "moduleType": [],
+  "license": "MIT",
+  "homepage": "https://github.com/gvirk/AdvancedGraphicFinalProject",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests",
+    "Scripts/lib"
+  ],
+  "dependencies": {
+    "three.js": "threejs#*",
+    "dat-gui": "~0.5.1",
+    "stats.js": "*",
+    "Physijs": "physijs#*",
+    "EaselJS": "^0.8.2",
+    "TweenJS": "^0.6.2",
+    "SoundJS": "^0.6.2",
+    "PreloadJS": "^0.6.2"
+  }
+}
