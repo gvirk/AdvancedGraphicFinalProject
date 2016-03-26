@@ -5,26 +5,15 @@ var Scene = Physijs.Scene;
 var Renderer = THREE.WebGLRenderer;
 var PerspectiveCamera = THREE.PerspectiveCamera;
 var BoxGeometry = THREE.BoxGeometry;
-var CubeGeometry = THREE.CubeGeometry;
-var PlaneGeometry = THREE.PlaneGeometry;
 var SphereGeometry = THREE.SphereGeometry;
 var Geometry = THREE.Geometry;
-var AxisHelper = THREE.AxisHelper;
 var LambertMaterial = THREE.MeshLambertMaterial;
 var MeshBasicMaterial = THREE.MeshBasicMaterial;
 var LineBasicMaterial = THREE.LineBasicMaterial;
 var PhongMaterial = THREE.MeshPhongMaterial;
-var Material = THREE.Material;
-var Texture = THREE.Texture;
 var Line = THREE.Line;
-var Mesh = THREE.Mesh;
-var Object3D = THREE.Object3D;
 var SpotLight = THREE.SpotLight;
-var PointLight = THREE.PointLight;
-var AmbientLight = THREE.AmbientLight;
-var Color = THREE.Color;
 var Vector3 = THREE.Vector3;
-var Face3 = THREE.Face3;
 var CScreen = config.Screen;
 var Clock = THREE.Clock;
 // Setup a Web Worker for Physijs
@@ -68,6 +57,10 @@ var game = (function () {
     var coinMaterial;
     var coins;
     var cointCount = 10;
+    var fireGeometry;
+    var fireMaterial;
+    var fires;
+    var fireCount = 5;
     var deathPlaneGeometry;
     var deathPlaneMaterial;
     var deathPlane;
@@ -83,6 +76,7 @@ var game = (function () {
         { id: "land", src: "../../Assets/audio/Land.wav" },
         { id: "hit", src: "../../Assets/audio/hit.wav" },
         { id: "coin", src: "../../Assets/audio/coin.mp3" },
+        { id: "fire", src: "../../Assets/audio/Explosion4.wav" },
         { id: "jump", src: "../../Assets/audio/Jump.wav" }
     ];
     function preload() {
@@ -178,7 +172,7 @@ var game = (function () {
         scene.add(spotLight);
         console.log("Added spotLight to scene");
         // Ground Object
-        groundTexture = new THREE.TextureLoader().load('../../Assets/images/GravelCobble.jpg');
+        groundTexture = new THREE.TextureLoader().load('../../Assets/images/brickFloor.jpg');
         groundTexture.wrapS = THREE.RepeatWrapping;
         groundTexture.wrapT = THREE.RepeatWrapping;
         groundTexture.repeat.set(8, 8);
@@ -199,7 +193,7 @@ var game = (function () {
         console.log("Added Burnt Ground to scene");
         // Player Object
         playerGeometry = new BoxGeometry(2, 4, 2);
-        playerMaterial = Physijs.createMaterial(new LambertMaterial({ color: 0x00ff00 }), 0.4, 0);
+        playerMaterial = Physijs.createMaterial(new LambertMaterial({ map: THREE.ImageUtils.loadTexture("../../Assets/images/water.jpg") }), 0.4, 0);
         player = new Physijs.BoxMesh(playerGeometry, playerMaterial, 1);
         player.position.set(0, 30, 10);
         player.receiveShadow = true;
@@ -209,6 +203,8 @@ var game = (function () {
         console.log("Added Player to Scene");
         // Add custom coin imported from Blender
         addCoinMesh();
+        // Add custom fire imported from Blender
+        addFireMesh();
         addDeathPlane();
         // Collision Check
         player.addEventListener('collision', function (eventObject) {
@@ -221,6 +217,13 @@ var game = (function () {
                 scene.remove(eventObject);
                 setCoinPosition(eventObject);
                 scoreValue += 100;
+                scoreLabel.text = "SCORE: " + scoreValue;
+            }
+            if (eventObject.name === "Fire") {
+                createjs.Sound.play("fire");
+                scene.remove(eventObject);
+                setFirePosition(eventObject);
+                livesValue--;
                 scoreLabel.text = "SCORE: " + scoreValue;
             }
             if (eventObject.name === "DeathPlane") {
@@ -296,12 +299,36 @@ var game = (function () {
         });
         console.log("Added Coin Mesh to Scene");
     }
+    // Add the Fire to the scene
+    function addFireMesh() {
+        fires = new Array(); // Instantiate a convex mesh array
+        var fireLoader = new THREE.JSONLoader().load("../../Assets/imported/sphere.json", function (geometry) {
+            var phongMaterial = new PhongMaterial({ color: 0xFF0000 });
+            phongMaterial.emissive = new THREE.Color(0xFF0000);
+            var fireMaterial = Physijs.createMaterial((phongMaterial), 0.4, 0.6);
+            for (var count = 0; count < fireCount; count++) {
+                fires[count] = new Physijs.ConvexMesh(geometry, fireMaterial);
+                fires[count].receiveShadow = true;
+                fires[count].castShadow = true;
+                fires[count].name = "Fire";
+                setFirePosition(fires[count]);
+            }
+        });
+        console.log("Added Fire Mesh to Scene");
+    }
     // Set Coin Position
     function setCoinPosition(coin) {
         var randomPointX = Math.floor(Math.random() * 20) - 10;
         var randomPointZ = Math.floor(Math.random() * 20) - 10;
         coin.position.set(randomPointX, 10, randomPointZ);
         scene.add(coin);
+    }
+    // Set Fire Position
+    function setFirePosition(fire) {
+        var randomPointX = Math.floor(Math.random() * 20) - 10;
+        var randomPointZ = Math.floor(Math.random() * 20) - 10;
+        fire.position.set(randomPointX, 10, randomPointZ);
+        scene.add(fire);
     }
     //PointerLockChange Event Handler
     function pointerLockChange(event) {
@@ -354,6 +381,10 @@ var game = (function () {
         coins.forEach(function (coin) {
             coin.setAngularFactor(new Vector3(0, 0, 0));
             coin.setAngularVelocity(new Vector3(0, 1, 0));
+        });
+        fires.forEach(function (fire) {
+            fire.setAngularFactor(new Vector3(0, 0, 0));
+            fire.setAngularVelocity(new Vector3(0, 1, 0));
         });
         checkControls();
         stage.update();
@@ -437,4 +468,3 @@ var game = (function () {
         scene: scene
     };
 })();
-//# sourceMappingURL=game.js.map

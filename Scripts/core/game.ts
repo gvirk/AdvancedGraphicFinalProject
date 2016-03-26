@@ -78,6 +78,12 @@ var game = (() => {
     var coins: Physijs.ConcaveMesh[];
     var cointCount: number = 10;
     
+    var fireGeometry: Geometry;
+    var fireMaterial: Physijs.Material;
+
+    var fires: Physijs.ConcaveMesh[];
+    var fireCount: number = 5;
+    
     var deathPlaneGeometry: CubeGeometry;
     var deathPlaneMaterial: Physijs.Material;
     var deathPlane: Physijs.Mesh;
@@ -96,6 +102,7 @@ var game = (() => {
         { id: "land", src: "../../Assets/audio/Land.wav" },
         { id: "hit", src: "../../Assets/audio/hit.wav" },
         { id: "coin", src: "../../Assets/audio/coin.mp3" },
+        { id: "fire", src: "../../Assets/audio/Explosion4.wav" },
         { id: "jump", src: "../../Assets/audio/Jump.wav" }
     ];
 
@@ -222,7 +229,7 @@ var game = (() => {
         console.log("Added spotLight to scene");
 
         // Ground Object
-        groundTexture = new THREE.TextureLoader().load('../../Assets/images/GravelCobble.jpg');
+        groundTexture = new THREE.TextureLoader().load('../../Assets/images/brickFloor.jpg');
         groundTexture.wrapS = THREE.RepeatWrapping;
         groundTexture.wrapT = THREE.RepeatWrapping;
         groundTexture.repeat.set(8, 8);
@@ -247,7 +254,7 @@ var game = (() => {
 
         // Player Object
         playerGeometry = new BoxGeometry(2, 4, 2);
-        playerMaterial = Physijs.createMaterial(new LambertMaterial({ color: 0x00ff00 }), 0.4, 0);
+        playerMaterial = Physijs.createMaterial(new LambertMaterial({map: THREE.ImageUtils.loadTexture("../../Assets/images/water.jpg")}), 0.4, 0);
 
         player = new Physijs.BoxMesh(playerGeometry, playerMaterial, 1);
         player.position.set(0, 30, 10);
@@ -259,6 +266,9 @@ var game = (() => {
 
         // Add custom coin imported from Blender
         addCoinMesh();
+        
+        // Add custom fire imported from Blender
+        addFireMesh();
 
         addDeathPlane();
 
@@ -273,6 +283,13 @@ var game = (() => {
                 scene.remove(eventObject);
                 setCoinPosition(eventObject);
                 scoreValue += 100;
+                scoreLabel.text = "SCORE: " + scoreValue;
+            }
+            if (eventObject.name === "Fire") {
+                createjs.Sound.play("fire");
+                scene.remove(eventObject);
+                setFirePosition(eventObject);
+                livesValue--;
                 scoreLabel.text = "SCORE: " + scoreValue;
             }
             
@@ -370,6 +387,29 @@ var game = (() => {
 
         console.log("Added Coin Mesh to Scene");
     }
+    
+    // Add the Fire to the scene
+    function addFireMesh(): void {
+        
+        fires = new Array<Physijs.ConvexMesh>(); // Instantiate a convex mesh array
+
+        var fireLoader = new THREE.JSONLoader().load("../../Assets/imported/sphere.json", function(geometry: THREE.Geometry) {
+            var phongMaterial = new PhongMaterial({ color: 0xFF0000 });
+            phongMaterial.emissive = new THREE.Color(0xFF0000);
+            
+            var fireMaterial = Physijs.createMaterial((phongMaterial), 0.4, 0.6);
+            
+            for(var count:number = 0; count < fireCount; count++) {
+                fires[count] = new Physijs.ConvexMesh(geometry, fireMaterial);     
+                fires[count].receiveShadow = true;
+                fires[count].castShadow = true;
+                fires[count].name = "Fire";
+                setFirePosition(fires[count]);
+            }
+        });
+
+        console.log("Added Fire Mesh to Scene");
+    }
 
     // Set Coin Position
     function setCoinPosition(coin:Physijs.ConvexMesh): void {
@@ -377,6 +417,14 @@ var game = (() => {
         var randomPointZ: number = Math.floor(Math.random() * 20) - 10;
         coin.position.set(randomPointX, 10, randomPointZ);
         scene.add(coin);
+    }
+    
+    // Set Fire Position
+    function setFirePosition(fire:Physijs.ConvexMesh): void {
+        var randomPointX: number = Math.floor(Math.random() * 20) - 10;
+        var randomPointZ: number = Math.floor(Math.random() * 20) - 10;
+        fire.position.set(randomPointX, 10, randomPointZ);
+        scene.add(fire);
     }
 
     //PointerLockChange Event Handler
@@ -435,6 +483,11 @@ var game = (() => {
         coins.forEach(coin => {
             coin.setAngularFactor(new Vector3(0, 0, 0));
             coin.setAngularVelocity(new Vector3(0, 1, 0));
+        });
+        
+        fires.forEach(fire => {
+            fire.setAngularFactor(new Vector3(0, 0, 0));
+            fire.setAngularVelocity(new Vector3(0, 1, 0));
         });
 
         checkControls();
