@@ -24,17 +24,11 @@ import Object3D = THREE.Object3D;
 import SpotLight = THREE.SpotLight;
 import PointLight = THREE.PointLight;
 import AmbientLight = THREE.AmbientLight;
-import Control = objects.Control;
-import GUI = dat.GUI;
 import Color = THREE.Color;
 import Vector3 = THREE.Vector3;
 import Face3 = THREE.Face3;
-import Point = objects.Point;
 import CScreen = config.Screen;
 import Clock = THREE.Clock;
-
-//Custom Game Objects
-import gameObject = objects.gameObject;
 
 // Setup a Web Worker for Physijs
 Physijs.scripts.worker = "/Scripts/lib/Physijs/physijs_worker.js";
@@ -50,8 +44,6 @@ var game = (() => {
     var scene: Scene = new Scene(); // Instantiate Scene Object
     var renderer: Renderer;
     var camera: PerspectiveCamera;
-    var control: Control;
-    var gui: GUI;
     var stats: Stats;
     var blocker: HTMLElement;
     var instructions: HTMLElement;
@@ -63,6 +55,8 @@ var game = (() => {
     var groundTexture: Texture;
     var groundTextureNormal: Texture;
     var clock: Clock;
+
+    // THREEJS and PHYSIJS Objects
     var playerGeometry: CubeGeometry;
     var playerMaterial: Physijs.Material;
     var player: Physijs.Mesh;
@@ -78,10 +72,86 @@ var game = (() => {
     var directionLineGeometry: Geometry;
     var directionLine: Line;
 
-    function init() {
+    var coinGeometry: Geometry;
+    var coinMaterial: Physijs.Material;
+
+    var coins: Physijs.ConcaveMesh[];
+    var cointCount: number = 10;
+    
+    var deathPlaneGeometry: CubeGeometry;
+    var deathPlaneMaterial: Physijs.Material;
+    var deathPlane: Physijs.Mesh;
+
+    // CreateJS Related Variables
+    var assets: createjs.LoadQueue;
+    var canvas: HTMLElement;
+    var stage: createjs.Stage;
+    var scoreLabel: createjs.Text;
+    var livesLabel: createjs.Text;
+    var scoreValue: number;
+    var livesValue: number;
+
+
+    var manifest = [
+        { id: "land", src: "../../Assets/audio/Land.wav" },
+        { id: "hit", src: "../../Assets/audio/hit.wav" },
+        { id: "coin", src: "../../Assets/audio/coin.mp3" },
+        { id: "jump", src: "../../Assets/audio/Jump.wav" }
+    ];
+
+    function preload(): void {
+        assets = new createjs.LoadQueue();
+        assets.installPlugin(createjs.Sound);
+        assets.on("complete", init, this);
+        assets.loadManifest(manifest);
+    }
+
+    function setupCanvas(): void {
+        canvas = document.getElementById("canvas");
+        canvas.setAttribute("width", config.Screen.WIDTH.toString());
+        canvas.setAttribute("height", (config.Screen.HEIGHT * 0.1).toString());
+        canvas.style.backgroundColor = "#000000";
+        stage = new createjs.Stage(canvas);
+    }
+
+    function setupScoreboard(): void {
+        // initialize  score and lives values
+        scoreValue = 0;
+        livesValue = 5;
+
+        // Add Lives Label
+        livesLabel = new createjs.Text(
+            "LIVES: " + livesValue,
+            "40px Consolas",
+            "#ffffff"
+        );
+        livesLabel.x = config.Screen.WIDTH * 0.1;
+        livesLabel.y = (config.Screen.HEIGHT * 0.15) * 0.20;
+        stage.addChild(livesLabel);
+        console.log("Added Lives Label to stage");
+
+        // Add Score Label
+        scoreLabel = new createjs.Text(
+            "SCORE: " + scoreValue,
+            "40px Consolas",
+            "#ffffff"
+        );
+        scoreLabel.x = config.Screen.WIDTH * 0.8;
+        scoreLabel.y = (config.Screen.HEIGHT * 0.15) * 0.20;
+        stage.addChild(scoreLabel);
+        console.log("Added Score Label to stage");
+    }
+
+    function init(): void {
         // Create to HTMLElements
         blocker = document.getElementById("blocker");
         instructions = document.getElementById("instructions");
+
+        // Set Up CreateJS Canvas and Stage
+        setupCanvas();
+
+        // Set Up Scoreboard
+        setupScoreboard();
 
         //check to see if pointerlock is supported
         havePointerLock = 'pointerLockElement' in document ||
@@ -155,9 +225,9 @@ var game = (() => {
         groundTexture = new THREE.TextureLoader().load('../../Assets/images/GravelCobble.jpg');
         groundTexture.wrapS = THREE.RepeatWrapping;
         groundTexture.wrapT = THREE.RepeatWrapping;
-        groundTexture.repeat.set(1, 1);
+        groundTexture.repeat.set(8, 8);
 
-        groundTextureNormal = new THREE.TextureLoader().load('../../Assets/images/GravelCobbleNormal.jpg');
+        groundTextureNormal = new THREE.TextureLoader().load('../../Assets/images/GravelCobbleNormal.png');
         groundTextureNormal.wrapS = THREE.RepeatWrapping;
         groundTextureNormal.wrapT = THREE.RepeatWrapping;
         groundTextureNormal.repeat.set(8, 8);
@@ -167,7 +237,7 @@ var game = (() => {
         groundMaterial.bumpMap = groundTextureNormal;
         groundMaterial.bumpScale = 0.2;
 
-        groundGeometry = new BoxGeometry(19, 1, 92);
+        groundGeometry = new BoxGeometry(32, 1, 32);
         groundPhysicsMaterial = Physijs.createMaterial(groundMaterial, 0, 0);
         ground = new Physijs.ConvexMesh(groundGeometry, groundPhysicsMaterial, 0);
         ground.receiveShadow = true;
@@ -187,17 +257,32 @@ var game = (() => {
         scene.add(player);
         console.log("Added Player to Scene");
 
+        // Add custom coin imported from Blender
+        addCoinMesh();
+
+        addDeathPlane();
+
         // Collision Check
-        player.addEventListener('collision', (event) => {
-
-            console.log(event);
-
-            if (event.name === "Ground") {
-                console.log("player hit the ground");
+        player.addEventListener('collision', (eventObject) => {
+            if (eventObject.name === "Ground") {
                 isGrounded = true;
+                createjs.Sound.play("land");
             }
-            if (event.name === "Sphere") {
-                console.log("player hit the sphere");
+            if (eventObject.name === "Coin") {
+                createjs.Sound.play("coin");
+                scene.remove(eventObject);
+                setCoinPosition(eventObject);
+                scoreValue += 100;
+                scoreLabel.text = "SCORE: " + scoreValue;
+            }
+            
+            if(eventObject.name === "DeathPlane") {
+                createjs.Sound.play("hit");
+                livesValue--;
+                livesLabel.text = "LIVES: " + livesValue;
+                scene.remove(player);
+                player.position.set(0, 30, 10);
+                scene.add(player);
             }
         });
 
@@ -213,7 +298,6 @@ var game = (() => {
         // create parent-child relationship with camera and player
         player.add(camera);
         camera.position.set(0, 1, 0);
-        
 
         // Sphere Object
         sphereGeometry = new SphereGeometry(2, 32, 32);
@@ -226,11 +310,6 @@ var game = (() => {
         //scene.add(sphere);
         //console.log("Added Sphere to Scene");
 
-        // add controls
-        gui = new GUI();
-        control = new Control();
-        addControl(control);
-
         // Add framerate stats
         addStatsObject();
         console.log("Added Stats to scene...");
@@ -240,6 +319,64 @@ var game = (() => {
         scene.simulate();
 
         window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function setCenter ( geometry:Geometry ): Vector3 {
+
+		geometry.computeBoundingBox();
+
+		var bb = geometry.boundingBox;
+
+		var offset = new THREE.Vector3();
+
+		offset.addVectors( bb.min, bb.max );
+		offset.multiplyScalar( -0.5 );
+
+		geometry.applyMatrix( new THREE.Matrix4().makeTranslation( offset.x, offset.y, offset.z ) );
+		geometry.computeBoundingBox();
+
+		return offset;
+	}
+
+    function addDeathPlane():void {
+        deathPlaneGeometry = new BoxGeometry(100, 1, 100);
+        deathPlaneMaterial = Physijs.createMaterial(new MeshBasicMaterial({color: 0xff0000}), 0.4, 0.6);
+       
+        deathPlane =  new Physijs.BoxMesh(deathPlaneGeometry, deathPlaneMaterial, 0);
+        deathPlane.position.set(0, -10, 0);
+        deathPlane.name = "DeathPlane";
+        scene.add(deathPlane);
+}
+    
+    // Add the Coin to the scene
+    function addCoinMesh(): void {
+        
+        coins = new Array<Physijs.ConvexMesh>(); // Instantiate a convex mesh array
+
+        var coinLoader = new THREE.JSONLoader().load("../../Assets/imported/coin.json", function(geometry: THREE.Geometry) {
+            var phongMaterial = new PhongMaterial({ color: 0xE7AB32 });
+            phongMaterial.emissive = new THREE.Color(0xE7AB32);
+            
+            var coinMaterial = Physijs.createMaterial((phongMaterial), 0.4, 0.6);
+            
+            for(var count:number = 0; count < cointCount; count++) {
+                coins[count] = new Physijs.ConvexMesh(geometry, coinMaterial);     
+                coins[count].receiveShadow = true;
+                coins[count].castShadow = true;
+                coins[count].name = "Coin";
+                setCoinPosition(coins[count]);
+            }
+        });
+
+        console.log("Added Coin Mesh to Scene");
+    }
+
+    // Set Coin Position
+    function setCoinPosition(coin:Physijs.ConvexMesh): void {
+        var randomPointX: number = Math.floor(Math.random() * 20) - 10;
+        var randomPointZ: number = Math.floor(Math.random() * 20) - 10;
+        coin.position.set(randomPointX, 10, randomPointZ);
+        scene.add(coin);
     }
 
     //PointerLockChange Event Handler
@@ -272,10 +409,13 @@ var game = (() => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-    }
 
-    function addControl(controlObject: Control): void {
-        /* ENTER CODE for the GUI CONTROL HERE */
+        canvas.style.width = "100%";
+        livesLabel.x = config.Screen.WIDTH * 0.1;
+        livesLabel.y = (config.Screen.HEIGHT * 0.15) * 0.20;
+        scoreLabel.x = config.Screen.WIDTH * 0.8;
+        scoreLabel.y = (config.Screen.HEIGHT * 0.15) * 0.20;
+        stage.update();
     }
 
     // Add Frame Rate Stats to the Scene
@@ -292,10 +432,13 @@ var game = (() => {
     function gameLoop(): void {
         stats.update();
 
+        coins.forEach(coin => {
+            coin.setAngularFactor(new Vector3(0, 0, 0));
+            coin.setAngularVelocity(new Vector3(0, 1, 0));
+        });
+
         checkControls();
-
-
-
+        stage.update();
 
         // render using requestAnimationFrame
         requestAnimationFrame(gameLoop);
@@ -331,7 +474,9 @@ var game = (() => {
                     velocity.y += 4000.0 * delta;
                     if (player.position.y > 4) {
                         isGrounded = false;
+                        createjs.Sound.play("jump"); 
                     }
+                    
                 }
 
                 player.setDamping(0.7, 0.1);
@@ -388,7 +533,7 @@ var game = (() => {
         console.log("Finished setting up Camera...");
     }
 
-    window.onload = init;
+    window.onload = preload;
 
     return {
         scene: scene
